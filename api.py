@@ -48,7 +48,7 @@ class CoinMarketCapAPI:
                 'convert': 'USD'
             }
             
-            response = requests.get(url, headers=self.headers, params=parameters)
+            response = requests.get(url, headers=self.headers, params=parameters, timeout=10)
             response.raise_for_status()
             
             data = response.json()

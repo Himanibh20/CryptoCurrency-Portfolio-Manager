@@ -27,14 +27,14 @@ class CryptoPortfolioApp:
         # Store current prices
         self.current_prices: Dict = {}
         
+        # Flag to track if application is running
+        self.is_running = True
+        
         # Setup UI
         self.setup_ui()
         
         # Load initial data
         self.refresh_portfolio()
-        
-        # Set up periodic price updates
-        self.auto_refresh()
     
     def setup_ui(self):
         """Set up the user interface."""
@@ -283,7 +283,11 @@ class CryptoPortfolioApp:
             # Fetch prices (in a thread to avoid UI freezing)
             def fetch_prices():
                 self.current_prices = self.api.get_latest_prices(symbols)
-                self.root.after(0, self.update_display, portfolio)
+                if self.is_running:
+                    try:
+                        self.root.after(0, self.update_display, portfolio)
+                    except tk.TclError:
+                        pass  # Window was destroyed
             
             thread = threading.Thread(target=fetch_prices, daemon=True)
             thread.start()
@@ -309,19 +313,17 @@ class CryptoPortfolioApp:
             total_value += value
             
             # Format values
+            amount_str = f"{amount:.8g}" if amount < 1 else f"{amount:.6g}"
             price_str = f"${price:,.2f}" if price > 0 else "N/A"
             value_str = f"${value:,.2f}"
             change_str = f"{percent_change:+.2f}%" if percent_change != 0 else "0.00%"
-            
-            # Color code the change
-            change_color = "#27AE60" if percent_change > 0 else "#E74C3C" if percent_change < 0 else "#95A5A6"
             
             # Insert into treeview
             self.tree.insert(
                 "",
                 tk.END,
-                values=(symbol, name, f"{amount:.8f}".rstrip('0').rstrip('.'), price_str, value_str, change_str),
-                tags=(coin_id, change_color)
+                values=(symbol, name, amount_str, price_str, value_str, change_str),
+                tags=(coin_id,)
             )
         
         # Update total value
@@ -332,8 +334,9 @@ class CryptoPortfolioApp:
     
     def auto_refresh(self):
         """Automatically refresh prices every 60 seconds."""
-        self.refresh_portfolio()
-        self.root.after(60000, self.auto_refresh)  # 60000 ms = 60 seconds
+        if self.is_running:
+            self.refresh_portfolio()
+            self.root.after(60000, self.auto_refresh)  # 60000 ms = 60 seconds
     
     def get_current_time(self):
         """Get current time as a formatted string."""
@@ -342,6 +345,7 @@ class CryptoPortfolioApp:
     
     def on_closing(self):
         """Handle application closing."""
+        self.is_running = False
         self.db.close()
         self.root.destroy()
 
@@ -351,6 +355,10 @@ def main():
     root = tk.Tk()
     app = CryptoPortfolioApp(root)
     root.protocol("WM_DELETE_WINDOW", app.on_closing)
+    
+    # Start auto-refresh after window is fully initialized
+    app.auto_refresh()
+    
     root.mainloop()
 
 
